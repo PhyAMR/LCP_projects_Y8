@@ -19,19 +19,22 @@ Here is the complete, expanded **`README.md`** file. It combines the setup instr
 
 ---
 
-# 🚀 Project Name: [Insert Project Title]
-
-This repository is a focused fork of **[Original Creator/Project Name]**. To keep our collaboration clean, we are working exclusively on the **`Group17`** branch.
+Here is the updated, consolidated `README.md` in English. I have merged the original course instructions with your specific group's workflow, including the **`uv`** setup and the **Rebase** strategy to keep your history clean.
 
 ---
 
-## 🛠 Setup Instructions
+# 🚀 Group 17 - Final Project: Hierarchical mergers of binary black holes
 
-Follow these steps to ensure your local environment only tracks our active branch and stays synced with the original source.
+This repository is a focused fork of the [LCP Projects Y8 Central Repo](https://www.google.com/search?q=https://github.com/PhysicsOfData/LCP_projects_Y8). We are working exclusively on the **`Group17`** branch to complete our final project.
 
-### 1. Clone the Specific Branch
 
-This command clones *only* our working branch, saving you from downloading unnecessary history.
+## 🛠 Setup & Dependencies
+
+We use **`uv`** for dependency management to ensure everyone has the same environment.
+
+### 1. Clone & Isolation
+
+Clone only our branch to keep the environment clean:
 
 ```bash
 git clone --branch Group17 --single-branch git@github.com:PhyAMR/LCP_projects_Y8.git
@@ -39,47 +42,58 @@ cd LCP_projects_Y8
 
 ```
 
-### 2. Connect to the "Upstream" (Original Project)
+### 2. Configure Remotes
 
-To pull in core updates from the original repository, add it as a remote:
+Connect to the original source to pull core updates:
 
 ```bash
 git remote add upstream git@github.com:PhysicsOfData/LCP_projects_Y8.git
-
-```
-
-### 3. Lockdown the Remote
-
-Run this to ensure your Git doesn't try to fetch other branches from the fork:
-
-```bash
 git remote set-branches origin Group17
 git fetch --prune origin
 
 ```
 
+### 3. Environment Setup
+
+Install the required libraries (Python version and dependencies) automatically:
+
+```bash
+uv sync
+
+```
+
+*This creates a `.venv` folder. Use `uv run jupyter notebook` or set your IDE to use the interpreter inside `.venv`.*
+
 ---
 
-## 🔄 Daily Workflow
+## 🔄 Collaboration Workflow (Rebase Strategy)
 
-To avoid merge conflicts, follow this "Loop":
+To avoid a "spiderweb" of merge commits and keep our history linear, we use the **Pull-Rebase-Push** cycle.
 
-1. **Update your local code:**
+1. **Before you start:** Sync with your teammates.
 ```bash
-git pull origin Group17
+git pull --rebase origin Group17
 
 ```
 
 
-2. **Work and Commit:**
+2. **Work and Commit:** Keep changes small.
 ```bash
 git add .
-git commit -m "Brief description of what you changed"
+git commit -m "Brief description of changes"
 
 ```
 
 
-3. **Push to the fork:**
+3. **Sync before pushing:** In case someone pushed while you were working.
+```bash
+git fetch origin
+git rebase origin/Group17
+
+```
+
+
+4. **Push:**
 ```bash
 git push origin Group17
 
@@ -89,38 +103,22 @@ git push origin Group17
 
 ---
 
-## ⚠️ Troubleshooting & Common Fixes
+## ⚠️ Troubleshooting
 
-### "I see branches I don't want"
+### Conflict Resolution
 
-If `git branch -a` still shows old branches from the original repo, force a cleanup:
+If `git rebase` stops due to a conflict:
 
-```bash
-git fetch --prune origin
+1. Open the files and find the `<<<<<<< HEAD` markers.
+2. Resolve the conflict manually.
+3. Run `git add <file>` (do NOT commit).
+4. Run `git rebase --continue`.
 
-```
 
-### "Automatic merge failed" (Merge Conflicts)
-
-If you and a friend edit the same line, Git will get confused.
-
-1. Open the files listed in the error.
-2. Look for `<<<<<<< HEAD` and `>>>>>>>`.
-3. Delete the markers and keep the code you want.
-4. `git add <file>` and `git commit`.
-
-### "Updates were rejected" (Non-fast-forward)
-
-This happens if someone pushed changes while you were working.
-
-* **Fix:** Run `git pull origin Group17` first, resolve any conflicts, then push again.
-
----
 
 ## 📬 Coordination
 
-* **Lead:** [Your Name/Handle]
-* **Chat:** [Insert Discord/Slack Link]
-
----
+* **Project Lead:** [Your Name]
+* **Communication:** [Insert Link to Discord/Slack/WhatsApp]
+* **Group VM (CloudVeneto):** [Insert IP if applicable]
 
