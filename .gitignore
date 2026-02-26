@@ -1,1 +1,25 @@
 fastcluster_comp_physA/
+
+# Entornos virtuales (No subir nunca)
+.venv/
+env/
+venv/
+ENV/
+
+# Archivos de Python/Compilación
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Configuración local de Python
+.python-version
+
+# Datos y Salidas (Basado en tu estructura de carpetas anterior)
+# Si no quieres subir los 111MB de archivos .txt a GitHub:
+*_output_noclusterevolv/
+*.parquet
+
+# IDEs (Opcional pero útil)
+.vscode/
+.idea/
+.DS_Store
