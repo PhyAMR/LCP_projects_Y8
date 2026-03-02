@@ -33,6 +33,7 @@ df_final = pd.concat(all_data, ignore_index=True)
 df_final.drop(columns=['c5:theta1', 'c6:theta2', 'c7:SMA(Rsun)', 'c8:ecc','c10:SMAfin(cm)', 'c11:eccfin',
        'c12:tpeters/Myr', 'c14:vkick/kms', 'c18:flag1', 'c19:flag2', 'c20:flag3', 'c21:flagSN', 'c22:flag_exch',
        'c23:flag_t3bb', 'c24:flag_evap','c26:ecc(10Hz)'], inplace=True)
+df_final['c0:identifier'] = df_final['c0:identifier'].astype('category')
 
 profile_total = ProfileReport(df_final, title="Profiling Report for total dataset", explorative=True)
 profile_total.to_file("total_report.html")
