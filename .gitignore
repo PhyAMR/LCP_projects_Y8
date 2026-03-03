@@ -26,3 +26,4 @@ __pycache__/
 
 #specific files
 nohup.out
+*.csv
