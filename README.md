@@ -32,6 +32,18 @@ This repository is a focused fork of the [LCP Projects Y8 Central Repo](https://
 
 We use **`uv`** for dependency management to ensure everyone has the same environment.
 
+### Installing uv
+
+If `uv` is not already installed, install it with pip (recommended):
+
+```bash
+python -m pip install --user --upgrade uv
+# or system-wide
+python -m pip install --upgrade uv
+```
+
+This provides the `uv` CLI used below.
+
 ### 1. Clone & Isolation
 
 Clone only our branch to keep the environment clean:
@@ -58,7 +70,7 @@ git fetch --prune origin
 Install the required libraries (Python version and dependencies) automatically:
 
 ```bash
-uv sync
+uv sync  # reads pyproject.toml / uv.lock and creates a .venv for the project
 
 ```
 
