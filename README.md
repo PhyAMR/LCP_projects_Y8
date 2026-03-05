@@ -45,13 +45,19 @@ python -m pip install --upgrade uv
 This provides the `uv` CLI used below.
 
 ### 1. Clone & Isolation
-
+#### With SSH key
 Clone only our branch to keep the environment clean:
 
 ```bash
 git clone --branch Group17 --single-branch git@github.com:PhyAMR/LCP_projects_Y8.git
 cd LCP_projects_Y8
 
+```
+#### Without SSH key
+Clone only the Group17 branch
+```bash
+git clone --branch Group17 --single-branch https://github.com/PhyAMR/LCP_projects_Y8.git
+cd LCP_projects_Y8
 ```
 
 ### 2. Configure Remotes
