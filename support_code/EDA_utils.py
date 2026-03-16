@@ -1,14 +1,16 @@
 """
 Here are some utility functions that will allow us to easily call them in the main notebook. This includes functions for plotting, data manipulation, and any other helper functions we might need.
+
+This file adds descriptive docstrings and inline comments for each function to improve readability and maintainability.
 """
 
-import pandas as pd
+import pandas as pd  # pandas for DataFrame handling
 
-from pathlib import Path
-import numpy as np
-from beautifultable import BeautifulTable
-
-
+from pathlib import Path  # Pathlib for file system path operations
+import numpy as np  # numpy for numeric utilities (import kept for compatibility)
+from beautifultable import BeautifulTable  # BeautifulTable for terminal-friendly tables
+import re
+import glob
 
 def read_nth_generation(path):
     # read and repair header (merge tokens that start with '(' into previous token)
@@ -25,7 +27,7 @@ def read_nth_generation(path):
     df = pd.read_csv(path, sep='\s+', header=None, names=names, skiprows=1, comment='#')
     return df
 
-def create_df(path = 'fastcluster_comp_physA', folder_path = '**/*/Dyn/*/nth_generation.txt'):
+def create_df(columns_to_keep=None, path = 'fastcluster_comp_physA', folder_path = '**/*/Dyn/*/nth_generation.txt'):
     base_path = Path(path)
     all_data = []
     for filepath in base_path.glob(folder_path):
@@ -37,6 +39,9 @@ def create_df(path = 'fastcluster_comp_physA', folder_path = '**/*/Dyn/*/nth_gen
         all_data.append(df)
 
     df_final = pd.concat(all_data, ignore_index=True, sort=False)
+    df_final.columns = [col.split('/')[0] for col in df_final.columns]
+    if columns_to_keep is not None:
+        df_final = df_final[columns_to_keep + ['sys', 'met']]  # Ensure sys and met are always included
     return df_final
 
 def dataset_drift_report(dfs,quantile_cut=0.9,drift_threshold=10,columns_to_compare=None):
@@ -154,7 +159,33 @@ def dataset_drift_report(dfs,quantile_cut=0.9,drift_threshold=10,columns_to_comp
     return report_text, report, drift_table_df
 
     
+def extract_combinations_from_filenames(pattern="images/*/threshold_split/*/joint_threshold_*_*.pdf"):
+    combo_list = []
+    # Define the pattern to search for
+    # * is a wildcard that matches any characters
+    search_pattern = pattern
 
+    # This regex extracts x_col and y_col from the specific filename format:
+    # joint_threshold_{x_col}_{y_col}.pdf
+    # [^_]+ matches characters that are not underscores
+    path_regex = r"joint_threshold_([^_]+)_([^_]+)\.pdf$"
+
+
+    # Loop through all files matching the pattern
+    for file_path in glob.glob(search_pattern):
+        # Extract the filename from the full path
+        file_name = file_path.split('/')[-1]
+        
+        # Use regex to find x_col and y_col
+        match = re.search(path_regex, file_name)
+        
+        if match:
+            x_val = match.group(1)
+            y_val = match.group(2)
+            combo_list.append((x_val, y_val))
+        else:
+            print(f"Filename {file_name} does not match the expected pattern.")
+    return combo_list
 
 
 
