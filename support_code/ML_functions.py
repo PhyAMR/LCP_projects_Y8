@@ -1,4 +1,5 @@
 # Function to train LightGBM model.
+from dacite.generics import orig
 import lightgbm as lgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -15,7 +16,7 @@ def train_model_lgb(df, features, target, params, stratify=False):
         text2 = re.sub(r'[:/+,]', '_', text)
         text = re.sub(r'[()]', '', text2)
         return text
-
+    orig_df_columns = df.columns.tolist()  # Store original column names.
     # Apply to list of features
     df.columns = [clean_name(col) for col in df.columns]
     features_clean = [clean_name(fea) for fea in features]
@@ -46,6 +47,6 @@ def train_model_lgb(df, features, target, params, stratify=False):
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     print("Accuracy:", acc)
-    df.columns = features + [target]  # Restore original column names.
+    df.columns = orig_df_columns  # Restore original column names.
     
     return model, X_test, y_test, y_pred
