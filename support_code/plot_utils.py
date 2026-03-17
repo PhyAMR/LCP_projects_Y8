@@ -4,7 +4,8 @@ import seaborn as sns  # seaborn for statistical plotting
 import matplotlib.pyplot as plt  # matplotlib for figure handling
 import patchworklib as pw  # patchworklib to arrange multiple plots
 import fitz  # PyMuPDF
-import ipywidgets as widgets
+from IPython.display import HTML
+import base64
 
 
 def plot_joint_threshold_split(df, labels, x_col, y_col, row_col, label_dict, threshold_row=None, cat='sys', sample_size=200000, col_col=None, threshold_col=None, quantile=0.9, save=True):
@@ -179,16 +180,10 @@ def plot_joint_threshold_split(df, labels, x_col, y_col, row_col, label_dict, th
 
 
 def pdf_to_image_widget(file_path, width=800):
-    """Converts the first page of a PDF to a high-res Image widget."""
     doc = fitz.open(file_path)
-    page = doc.load_page(0)
-    
-    # Increase resolution for sharp text in graphs
-    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-    image_bytes = pix.tobytes("png")
-    
-    # Return as a Jupyter Image widget
-    return widgets.Image(value=image_bytes, format='png', width=width)
+    img_bits = doc.load_page(0).get_pixmap(matrix=fitz.Matrix(2,2)).tobytes("png")
+    encoded = base64.b64encode(img_bits).decode()
+    return HTML(f'<img src="data:image/png;base64,{encoded}" width="800">')
 
 
 def plot_feature_importance(model, features, title, label_dict):
