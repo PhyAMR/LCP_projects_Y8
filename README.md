@@ -15,20 +15,14 @@ A Virtual Machine within [CloudVeneto](http://cloudveneto.it/) can be created fo
 
 Alternatively, students can use [colab](https://colab.research.google.com/) (for which though no instructions are provided here).
 
-Here is the complete, expanded **`README.md`** file. It combines the setup instructions, the workflow, and a new troubleshooting section to handle the most common "Git headaches" your friends might encounter.
 
----
 
-Here is the updated, consolidated `README.md` in English. I have merged the original course instructions with your specific group's workflow, including the **`uv`** setup and the **Rebase** strategy to keep your history clean.
-
----
-
-# 🚀 Group 17 - Final Project: Hierarchical mergers of binary black holes
+# Group 17 - Final Project: Hierarchical mergers of binary black holes
 
 This repository is a focused fork of the [LCP Projects Y8 Central Repo](https://www.google.com/search?q=https://github.com/PhysicsOfData/LCP_projects_Y8). We are working exclusively on the **`Group17`** branch to complete our final project.
 
 
-## 🛠 Setup & Dependencies
+## Setup & Dependencies
 
 We use **`uv`** for dependency management to ensure everyone has the same environment.
 
@@ -84,7 +78,7 @@ uv sync  # reads pyproject.toml / uv.lock and creates a .venv for the project
 
 ---
 
-## 🔄 Collaboration Workflow (Rebase Strategy)
+## Collaboration Workflow (Rebase Strategy)
 
 To avoid a "spiderweb" of merge commits and keep our history linear, we use the **Pull-Rebase-Push** cycle.
 
@@ -131,12 +125,4 @@ If `git rebase` stops due to a conflict:
 2. Resolve the conflict manually.
 3. Run `git add <file>` (do NOT commit).
 4. Run `git rebase --continue`.
-
-
-
-## 📬 Coordination
-
-* **Project Lead:** [Your Name]
-* **Communication:** [Insert Link to Discord/Slack/WhatsApp]
-* **Group VM (CloudVeneto):** [Insert IP if applicable]
 
