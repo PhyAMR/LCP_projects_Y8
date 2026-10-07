@@ -1,0 +1,1010 @@
+---
+title: Hierarchical mergers of binary black holes
+jupyter: python3
+---
+
+
+All the relevant information for the project are to be found in the pdf document present in the repo.
+Note that you are assigned to project 2 (as the title said).
+
+## Datasets 
+
+Datasets are stored on Google Drive (link and description in the pdf document)
+
+### Contacts
+
+* Giuliano Iorio <giuliano.iorio@unipd.it>
+
+
+|Last Name|	First Name	|Student Number
+|--|--|--|
+|Miguel |	Ordén  |	2183906
+|Adrián |	Orellana  |	218002
+|Jose |	Gonzalez Lopez de Lerma  |	2121944
+|Álvaro |	Méndez  |	2185566
+
+## Introduction
+
+For a brief description of the theory and the dataset consult the[project_description_astro_mapelli.pdf]{pdf} where everything is explained, the data can be downloaded and the dataset is explained.
+
+### Goal
+
+Our goal in this project is to classify the different clusters based on the data provided and for each cluster predict if it will have 1 or more mergers. In order to do that we perform an analysis gaining insights about the data, see the distribution of the data and how it correlates to other variables. After that we start the classification task.
+
+- Classification of the cluster
+Here we try to use the data to predict to which cluster the system belong (NSC, YSC, GC) based on the more relevant properties of the global dataset.
+
+- Classification of the number of mergers
+Here we try to predict the number of merger a system will have, in order to do that we study each system separaetly since each system will have very different ranges for their properties 
+
+## Libraries 
+
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import patchworklib as pw
+from support_code.EDA_utils import dataset_drift_report, create_df, extract_combinations_from_filenames
+from support_code.plot_utils import plot_joint_threshold_split, pdf_to_image_widget
+from ydata_profiling import ProfileReport
+pw.overwrite_axisgrid() #When you use pw.load_seagorngrid, 'overwrite_axisgrid' should be executed　in advance
+```
+
+## Data load
+
+Here we load the different files containing all the data that we will use for this project. We will merge all data in to one large file adding flags to the nature of the system and to the metallicitty so we don't loose information. This will make it easier in order to make an exploratory analysis
+
+```{python}
+# uncomment and run this code block to read and combine all nth_generation.txt files into a single DataFrame execute only the first time or to modify the dataset
+
+#df_final = create_df(columns_to_keep=['c0:identifier','c1:M1', 'c2:M2', 'c3:chi1', 'c4:chi2','c9:(tDF+min(t12,t3bb))', 'c13:(ngen (tDF+t3bb+tpeters))','c14:vkick','c15:mrem', 'c16:arem', 'c17:vesc', 'c25:Mtot', 'c27:Ngen'])
+#df_final.to_csv('combined_nth_generation.csv', index=False) # Save the combined DataFrame to a CSV file for future use and faster loading in subsequent runs
+```
+
+Now we drop the columns that have no useful information for our classification task
+
+```{python}
+df_final = pd.read_csv('combined_nth_generation.csv')
+df_final['c0:identifier'] = df_final['c0:identifier'].astype("category")  # Ensure the identifier is treated as a string/categorical variable
+```
+
+## Exploratory Data Analysis (EDA)
+
+Now we will perform an exploration of the different parameters to detect some outliers and clean the datasets in order to make sure we have consistent measurements. 
+
+Now we separate the data into three different dataframes according to the type of system they belong to, this will make it easier incase we want to analyze the data in a same group
+
+```{python}
+df_GC = df_final[df_final['sys'] == 'GC'].copy()
+print(f"GC dataset shape: {df_GC.shape}")
+df_NSC = df_final[df_final['sys'] == 'NSC'].copy()
+print(f"NSC dataset shape: {df_NSC.shape}")
+df_YSC = df_final[df_final['sys'] == 'YSC'].copy()
+print(f"YSC dataset shape: {df_YSC.shape}")
+```
+
+We see that the classes are unbalanced, and while we can not use only the amount of data of the smallest class (that would affect the predictions) we can try to select a sample of the data and check if we have the same statistics, meaning we see the same distribution while having a less unbalanced and a dataset easier to manage
+
+Let's first create a report to visualize better that structure of the dataset and also see some correlations in the data to see the total distribution of each category
+
+```{python}
+#profile_GC = ProfileReport(df_GC, title="Profiling Report for GC", explorative=True)
+#profile_GC.to_file("reports/GC_report.html")
+#profile_YSC = ProfileReport(df_YSC, title="Profiling Report for YSC", explorative=True)
+#profile_YSC.to_file("reports/YSC_report.html")
+#profile_NSC = ProfileReport(df_NSC, title="Profiling Report for NSC", explorative=True)
+#profile_NSC.to_file("reports/NSC_report.html")
+```
+
+After looking at the profiling reports, we can see that there are some differences in the distributions of certain features across the three datasets. Some distributions are skewed towards certain values and there are some data like the mass of the remanent that it is zero when that is impossibe, so now we clean the zeros
+
+```{python}
+#df_final = df_final[df_final['c13:(ngen (tDF+t3bb+tpeters))'] < 13.6*1000] # Filter out values greater than 13.6k Myr
+df_final = df_final[df_final['c15:mrem'] != 0]
+
+df_GC = df_final[df_final['sys'] == 'GC']
+print(f"GC dataset shape: {df_GC.shape}")
+df_NSC = df_final[df_final['sys'] == 'NSC']
+print(f"NSC dataset shape: {df_NSC.shape}")
+df_YSC = df_final[df_final['sys'] == 'YSC']
+print(f"YSC dataset shape: {df_YSC.shape}")
+```
+
+Now we sample the datasets
+
+```{python}
+sample_size = 50000
+df_GC_sampled = df_GC.sample(frac=sample_size/df_GC.shape[0], random_state=42)
+df_NSC_sampled = df_NSC.sample(frac= sample_size/df_NSC.shape[0], random_state=42)
+```
+
+```{python}
+dfs_NSC = {
+    
+    "NSC (Orig)": df_NSC,
+    
+    "NSC (Samp)": df_NSC_sampled
+}
+dfs_GC = {
+    "GC (Orig)": df_GC,
+    "GC (Samp)": df_GC_sampled
+}
+```
+
+```{python}
+text_report, stats_table, drift_table = dataset_drift_report(
+    dfs_NSC,
+    quantile_cut=1,
+    drift_threshold=5,
+    columns_to_compare=['c1:M1', 'c2:M2', 'c3:chi1', 'c4:chi2','c9:(tDF+min(t12,t3bb))', 'c13:(ngen (tDF+t3bb+tpeters))','c15:mrem', 'c16:arem', 'c17:vesc', 'c25:Mtot']
+)
+print(text_report)
+```
+
+As we can see the statistics didn't change considerably even when using 7% of the data in the NSC group
+
+```{python}
+text_report, stats_table, drift_table = dataset_drift_report(
+    dfs_GC,
+    quantile_cut=1,
+    drift_threshold=5,
+    columns_to_compare=['c1:M1', 'c2:M2', 'c3:chi1', 'c4:chi2','c9:(tDF+min(t12,t3bb))', 'c13:(ngen (tDF+t3bb+tpeters))','c15:mrem', 'c16:arem', 'c17:vesc', 'c25:Mtot']
+)
+print(text_report)
+```
+
+Since we have shown that we can use a reduced versio of the data without compromising the statistics of the dataset by much we can therefore create the dataframes 
+
+```{python}
+#profile_GC = ProfileReport(df_GC_sampled, title="Profiling Report for GC (sampled)", explorative=True)
+#profile_GC.to_file("reports/GC_report_samp.html")
+# #The YSC report is the same because we havent changed because the sample size was bigger than the dataframe
+#profile_NSC = ProfileReport(df_NSC_sampled, title="Profiling Report for NSC (sampled)", explorative=True)
+#profile_NSC.to_file("reports/NSC_report_samp.html")
+#profile_total = ProfileReport(df_final, title="Profiling Report for total dataset", explorative=True)
+#profile_total.to_file("total_report.html")
+```
+
+After seeing the reports we notice that the values of the identifier column has values that are not unique so we will have to see if the rest of the columns has the same values and the entire row is duplicated or anything is else is happening
+
+```{python}
+id = df_final['c0:identifier'].unique()
+for i in id[:1]:
+    subset = df_final[df_final['c0:identifier'] == i]
+    if len(subset) > 1:
+        for col in df_final.columns:
+            if subset[col].nunique() > 1:
+                print(f"Identifier {i} has {subset[col].nunique()} different values in column {col}")
+```
+
+After executing the code we arrived to the conclusion that the rows with the same identifier are the same system after some number of generations, because we see that the only column that has the same value is the 'nGen' column
+
+```{python}
+label_dict = {
+    'c0:identifier': r'$\mathrm{ID}$',
+    'c1:M1': r'$M_1\,/\,M_\odot$',
+    'c2:M2': r'$M_2\,/\,M_\odot$',
+    'c3:chi1': r'$\chi_1$',
+    'c4:chi2': r'$\chi_2$',
+    'c9:(tDF+min(t12,t3bb))': r'$\left(t_{\mathrm{DF}}+\min\!\left(t_{12},t_{3\mathrm{bb}}\right)\right)/\mathrm{Myr}$',
+    'c13:(ngen (tDF+t3bb+tpeters))': r'$\left(n_{\mathrm{gen}}\,(t_{\mathrm{DF}}+t_{3\mathrm{bb}}+t_{\mathrm{peters}})\right)/\mathrm{Myr}$',
+    'c14:vkick': r'$v_{\mathrm{kick}}\ (\mathrm{km\,s^{-1}})$',
+    'c15:mrem': r'$m_{\mathrm{rem}}\,/\,M_\odot$',
+    'c16:arem': r'$a_{\mathrm{rem}}$',
+    'c17:vesc': r'$v_{\mathrm{esc}}\ (\mathrm{km\,s^{-1}})$',
+    'c25:Mtot': r'$M_{\mathrm{tot}}\,/\,M_\odot$',
+    'c27:Ngen': r'$N_{\mathrm{gen}}$',
+    'sys': r'$\mathrm{system}$',
+    'met': r'$Z$'
+}
+```
+
+Now we want to group our data more and not only by the nature of the original system, so we need variables with a small number of uniques values, but that are important for the classification. It is well known that the metallicity of an astrophysical system it can determine the state of the system, so two system with different mettallicities will have different properties. Also the number of mergers between blackholes is important because ...
+
+Now we see how many data fits the different requirement
+
+```{python}
+vals = sorted([0.0002, 0.008, 0.0012, 0.3])
+filter = lambda x, a, b: (x >= a) & (x < b)
+
+for i in range(len(vals)-1):
+    data = pd.concat([df_GC, df_YSC, df_NSC], ignore_index=True)
+    data = data[data["c27:Ngen"] <= 2]
+    data = data[filter(data["met"], vals[i], vals[i+1])]
+    data.dropna(inplace=True)
+    for sys in data['sys'].unique():
+        subset = data[data['sys'] == sys]
+        subset.dropna(inplace=True)
+        print(f"System: {sys}, met range: [{vals[i]}, {vals[i+1]}), Ngen <= 2")
+        print(subset.shape)
+        
+for i in range(len(vals)-1):
+    data = pd.concat([df_GC, df_YSC, df_NSC], ignore_index=True)
+    data = data[data["c27:Ngen"] > 2]
+    data = data[filter(data["met"], vals[i], vals[i+1])]
+    data.dropna(inplace=True)
+    for sys in data['sys'].unique():
+        subset = data[data['sys'] == sys]
+        subset.dropna(inplace=True)
+        print(f"System: {sys}, met range: [{vals[i]}, {vals[i+1]}), Ngen > 2")
+        print(subset.shape)
+```
+
+```{python}
+vals = sorted([0.0002, 0.008, 0.0012, 0.3])
+filter = lambda x, a, b: (x >= a) & (x < b)
+
+for i in range(len(vals)-1):
+    data = pd.concat([df_GC_sampled, df_YSC, df_NSC_sampled], ignore_index=True)
+    data = data[data["c27:Ngen"] <= 2]
+    data = data[filter(data["met"], vals[i], vals[i+1])]
+    data.dropna(inplace=True)
+    for sys in data['sys'].unique():
+        subset = data[data['sys'] == sys]
+        subset.dropna(inplace=True)
+        print(f"System: {sys}, met range: [{vals[i]}, {vals[i+1]}), Ngen <= 2")
+        print(subset.shape)
+
+for i in range(len(vals)-1):
+    data = pd.concat([df_GC_sampled, df_YSC, df_NSC_sampled], ignore_index=True)
+    data = data[data["c27:Ngen"] > 2]
+    data = data[filter(data["met"], vals[i], vals[i+1])]
+    data.dropna(inplace=True)
+    for sys in data['sys'].unique():
+        subset = data[data['sys'] == sys]
+        subset.dropna(inplace=True)
+        print(f"System: {sys}, met range: [{vals[i]}, {vals[i+1]}), Ngen > 2")
+        print(subset.shape)
+```
+
+We can see that for some conditions the groups are to small, and in other cases too big
+
+```{python}
+# This is just because we want to know which combinations of variables have been plotted in the joint threshold split plots, so I can avoid plotting them again
+combo_list = extract_combinations_from_filenames()
+print("Extracted combinations of x_col and y_col from filenames:")
+print(combo_list)
+```
+
+```{python}
+from itertools import combinations
+for combo in combinations(['c1:M1', 'c2:M2', 'c3:chi1', 'c4:chi2','c9:(tDF+min(t12,t3bb))', 'c13:(ngen (tDF+t3bb+tpeters))','c14:vkick','c15:mrem', 'c16:arem', 'c17:vesc', 'c25:Mtot'],2):#
+    if combo not in combo_list and (combo[1], combo[0]) not in combo_list:
+        try:
+            pw.overwrite_axisgrid() #When you use pw.load_seagorngrid, 'overwrite_axisgrid' should be executed　in advance
+            # The sample_size parameter is just to avoid making the plot too heavy, because some combinations of variables have a lot of data points, and the plot becomes unreadable, so I set a sample size to make it more readable, but still representative of the data
+            plot_joint_threshold_split(df_final, ['GC', 'YSC', 'NSC'], combo[0], combo[1], 'c27:Ngen',label_dict,  threshold_row=2,cat='sys',sample_size=10000, col_col='met', threshold_col=sorted([0.0002, 0.008, 0.0012, 0.3]),quantile=0.99, save=True)
+            combo_list.append(combo)
+        
+        except Exception as e:
+            print(f"Error plotting {combo[0]} vs {combo[1]}: {e}")
+            continue
+    else: 
+        continue
+```
+
+```{python}
+for combo in combinations(['c27:Ngen','c1:M1', 'c2:M2', 'c3:chi1', 'c4:chi2','c9:(tDF+min(t12,t3bb))', 'c13:(ngen (tDF+t3bb+tpeters))','c14:vkick','c15:mrem', 'c16:arem', 'c17:vesc', 'c25:Mtot'],2):#
+    if combo not in combo_list and (combo[1], combo[0]) not in combo_list:
+        try:
+            pw.overwrite_axisgrid() #When you use pw.load_seagorngrid, 'overwrite_axisgrid' should be executed　in advance
+            # The sample_size parameter is just to avoid making the plot too heavy, because some combinations of variables have a lot of data points, and the plot becomes unreadable, so I set a sample size to make it more readable, but still representative of the data
+            plot_joint_threshold_split(df_final, ['GC', 'YSC', 'NSC'], combo[0], combo[1], None,label_dict,  threshold_row=None,cat='sys',sample_size=10000, col_col=None, threshold_col=sorted([0.0002, 0.008, 0.0012, 0.3]),quantile=0.99, save=True)
+            combo_list.append(combo)
+            
+        except Exception as e:
+            print(f"Error plotting {combo[0]} vs {combo[1]}: {e}")
+            continue
+    else: 
+        continue
+```
+
+Now we comment the plots to see what information can we extract from the dataset, the following sections mark x-axis of the plot.
+
+There are more plots in the images folder of the repository but only a few where commented
+
+### Mass of the first BH $M_1\,/\,M_\odot$
+
+```{python}
+from IPython.display import display
+# Primary Mass (M1) vs Environmental and Resultant factors
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c1:M1/joint_threshold_c1:M1_c2:M2.pdf", width=2000))
+```
+
+In this plot we can observe the correlation between the masses of the two BH, and we see that this correlation can be seen across the different metallicity regimes, we also see the decreasing of values of the YSC cluster that is expected since they are young clusters that haven't evolve 
+
+```{python}
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c1:M1/joint_threshold_c1:M1_c17:vesc.pdf", width=2000))
+```
+
+In this plot we observe the importance of the escape velocity of the cluster in retaining the BHs, we see that for low values of escape velocity, the primary mass is limited to be less than 40 solar masses, while for higher values of escape velocity, we can see that the primary mass can reach up to 100 solar masses, this is because the higher escape velocity allows the cluster to retain more massive BHs that would otherwise be ejected from the cluster due to their high kick velocities after formation.
+It is observed the clear spearation between the different types of clusters, with YSCs having lower escape velocities and thus retaining less massive BHs, while NSCs have higher escape velocities and can retain more massive BHs, this is consistent with our understanding of the dynamics of these clusters and their ability to retain BHs after formation. Making the scape velocity an important feature for the models. 
+
+```{python}
+
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c1:M1/joint_threshold_c1:M1_c14:vkick.pdf", width=2000))
+```
+
+Now we observe that the velocity of the recoil wave has a low correlation with the primary mass since they distribute similarly across the different regimes. The kde plot shows that they don't distribute exactly the same and they form different groups of values.
+
+```{python}
+
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c1:M1/joint_threshold_c1:M1_c16:arem.pdf", width=2000))
+```
+
+Now we see a clear separation in the spin distribution, where the mass of the primary BH is not that determinant since the three clusters spread along the entire x-axis. We also notice the increas of lower spins as we increase in metallicity
+
+### Spin of the first BH $\chi_1$
+
+```{python}
+# Spin Correlations and Resultants
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c3:chi1/joint_threshold_c3:chi1_c4:chi2.pdf", width=2000))
+```
+
+In this plot we can clearly visualize that the mergers occur mostly in two regimes of spin,except in the case where higher generations of mergers happened in the YSC cluster were both islands are connected by a non small amount of points
+
+```{python}
+
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c3:chi1/joint_threshold_c3:chi1_c16:arem.pdf", width=2000))
+```
+
+Here we see that most of the spin of the remanent are higher values and that behaviour spread along all categories and regimes meanining thet it might not be an important feature, since it seems the spin of the remanent remanent system is highly defined by the spin of the primary BH
+
+```{python}
+
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c3:chi1/joint_threshold_c3:chi1_c14:vkick.pdf", width=2000))
+```
+
+Here we see that the velocity of the recoil gravitational wave spreads along all possible values evenly (closer to a uniform distribution)
+
+### Mass of the remanent system $M_{\mathrm{rem}}\,/\,M_\odot$
+
+```{python}
+# Remnant Mass vs Spin and Environment
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c15:mrem/joint_threshold_c15:mrem_c16:arem.pdf", width=2000))
+```
+
+Here we can see for +2 generations of mergers GC cluster has a lot more of pints and more concentrated in lower masses while the other two cluster have fewer and less focused points. Instead for those values with only two generations they are more evenly distributed, primarly because all the mergers with more tha two generations have an entry in the dataset but not viceversa
+
+```{python}
+
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c15:mrem/joint_threshold_c15:mrem_c17:vesc.pdf", width=2000))
+```
+
+As we have seen before with the escape velocity we can clearly distinct the different cluster types and that the remanent mass is higher for those clusters with more generations of mergers, which is expected since they have more chances to merge and increase their mass, but we can also see that there are some clusters with only two generations of mergers that have a high remanent mass, which might be due to the fact that they have a high primary mass or a high secondary mass, which are the main factors that determine the remanent mass.
+
+### Time evolution ($\left(t_{\mathrm{DF}}+\min\!\left(t_{12},t_{3\mathrm{bb}}\right)\right)/\mathrm{Myr}$)
+
+```{python}
+# Time scales and Retention
+display(pdf_to_image_widget("images/c27:Ngen/threshold_split/c9:(tDF+min(t12,t3bb))/joint_threshold_c9:(tDF+min(t12,t3bb))_c17:vesc.pdf", width=2000))
+```
+
+Here we can see a clear spearation between the cluster types and that most mergers occur at small time scales for multiple generation of mergers, but it has more spread when we only take into account those clusters with only a second generations
+
+### Summary
+Main insights
+1. From this section we conclude that we can effectively sample a fraction of the dataset maintaining an almost identical distribution not affecting the distribution and therefore reducing the dataset saving time without losing performance
+2. We have study some of the properties that contain a lot of information useful for the classification task
+
+# Classification
+
+#### Hierarchical Two-Step Approach: Macroscopic vs. Microscopic Physics
+
+In this project, we employ a two-step hierarchical machine learning approach rather than training a single, global model. 
+
+First, we classify the binary black holes based on their host environment (Globular Cluster, Nuclear Star Cluster, or Young Star Cluster). Second, we split the dataset into these separate environments to predict the microscopic fate of the binary (whether it `has_evolved_further` into a 3rd generation or further or stopped at Gen 2). 
+
+
+
+This separation is necessary due to two fundamental challenges in both astrophysics and data science:
+
+##### 1. Data Imbalance Across Environments
+Our dataset contains vastly different populations: millions of black holes reside in massive Nuclear Star Clusters (NSCs), while only a few thousand exist in Young Star Clusters (YSCs). If we fed all the data into a single model to predict evolutionary history, the algorithm would mathematically optimize for the NSCs (since they make up over 95% of the data). The unique physics governing the YSCs would be completely drowned out as statistical noise. 
+
+##### 2. The Global vs. Local Physics Conflict
+The physical rules that halt hierarchical black hole mergers change drastically depending on the gravitational "arena" they live in:
+* **In a YSC (Low Mass Environment):** The cluster's escape velocity ($v_{\mathrm{esc}}$) is very small. When two black holes merge, the resulting Gravitational Wave recoil kick ($v_{\mathrm{kick}}$) easily exceeds the escape velocity. The newly formed remnant is ejected into empty space, permanently stopping its evolution.
+* **In an NSC (High Mass Environment):** The escape velocity is massive. A standard merger recoil kick will not eject the remnant. Instead, evolution is only halted by extreme recoil kicks, which General Relativity dictates are driven by highly misaligned and large black hole spins ($\chi_1$, $\chi_2$). 
+
+If we mix all clusters together, the model attempts to average out the threshold for ejection across drastically different gravitational wells.
+
+**The Solution:** By classifying the cluster first, and then isolating the data by environment, we strip away the global macroscopic noise. This forces the Random Forest "Specialist Models" to focus purely on the *local binary physics* (masses, spins, and kicks) that dictate N-body survival in that specific gravitational well.
+
+## Predicting Binary Black Hole Outcomes with Random Forest
+
+#### The Random Forest Classifier: An Overview
+
+The **Random Forest Classifier** is an ensemble machine learning algorithm. Instead of relying on a single model to make predictions, it builds a "forest" of many individual Decision Trees and combines their results. 
+
+It relies on two core mathematical concepts to ensure the model is both accurate and resistant to overfitting:
+1. **Bagging (Bootstrap Aggregating):** Each tree in the forest is trained on a random subset of the data (drawn with replacement). This ensures that no two trees look at the exact same dataset.
+2. **Feature Randomness:** When a tree is deciding how to split a node (e.g., splitting black holes by mass), it is not allowed to look at all available features. It only looks at a random subset of features. 
+
+To make a final prediction, the Random Forest passes the data point through every single tree. Each tree casts a "vote" for a class (e.g., "YSC cluster" or "GSC cluster"), and the forest outputs the class with the majority vote.
+
+---
+
+#### Key Hyperparameters
+
+Hyperparameters are the manual dials we turn to control how the forest grows and learns. Modifying these is crucial for optimizing performance, especially on complex or imbalanced datasets.
+
+* **`n_estimators` (The Size of the Forest):** The total number of decision trees. A higher number (e.g., 300 or 500) creates a more stable, democratic vote and smoother decision boundaries, but takes longer to train.
+  
+* **`max_depth` (The Memory limit):** The maximum number of splits a tree is allowed to make from root to leaf. If left at `None`, trees will grow endlessly until they perfectly memorize the training data (severe overfitting). Setting a limit (e.g., 15 or 20) forces the model to learn general physical rules rather than memorizing noise.
+
+* **`min_samples_leaf` (The Outlier Shield):** The minimum number of data points that must exist in a final leaf node. Setting this to >1 (e.g., 4) prevents the tree from creating a highly specific, custom rule just to classify a single anomalous row of data.
+
+* **`criterion` (The Math of the Split):** The mathematical function used to measure the quality of a split. 
+  * *Gini Impurity:* The default; fast and measures the probability of misclassification.
+  * *Entropy:* Uses logarithmic calculations to measure information gain. It slightly penalizes chaotic splits, making it useful for highly overlapping datasets.
+
+* **`max_features` (The Blindfold):** The number of features considered at each split. Usually set to `sqrt` (the square root of total features). This forces trees to find creative ways to classify data without always relying on the single most dominant feature.
+
+* **`class_weight` (The Imbalance Corrector):** Crucial for datasets where one class massively outnumbers another. 
+  * `balanced`: Multiplies the minority class by a weight inversely proportional to its frequency across the whole dataset.
+  * `balanced_subsample`: Calculates and applies this weight dynamically for *each individual tree* based on the specific random sample of data that tree was given.
+
+### Host Cluster Environment Classification
+
+```{python}
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, classification_report
+import shap
+from support_code.plot_utils import plot_feature_importance
+```
+
+```{python}
+# we are going to create a new column that it is a binary identifier to see which models have evolve 
+# to further generations (more than 2g) and which have not.
+
+merger_counts = df_final.groupby('c0:identifier').size()
+
+df_final['chain_length'] = df_final['c0:identifier'].map(merger_counts)
+
+label_dict['chain_length'] = r'$\mathrm{Chain\  Length}$'
+
+df_final['has_evolved_further'] = (df_final['chain_length'] > 1).astype(int)
+
+label_dict['has_evolved_further'] = r'$\mathrm{Gen} \geq 3$'
+```
+
+```{python}
+# We transform the 'sys' column into a numeric column.
+le = LabelEncoder()
+
+df_final['sys_numeric'] = le.fit_transform(df_final['sys'])
+label_dict['sys_numeric'] = r'$\mathrm{Numerical\  Cluster\  Type}$'
+mapping = dict(zip(le.classes_, le.transform(le.classes_)))
+print(f"Mapping: {mapping}")
+```
+
+```{python}
+df_final.columns
+```
+
+```{python}
+features = ['c1:M1/Msun', 'c2:M2/Msun', 'c3:chi1', 'c4:chi2',
+       'c9:(tDF+min(t12,t3bb))/Myr', 'c13:(ngen (tDF+t3bb+tpeters))/Myr',
+       'c14:vkick/kms', 'c15:mrem/Msun', 'c16:arem', 'c17:vesc/kms',
+       'c25:Mtot/Msun', 'c27:Ngen', 'met', 'sys_numeric', 'chain_length', 'has_evolved_further']
+```
+
+```{python}
+features_cluster = [f for f in features if f not in ['sys_numeric', 'c25:Mtot/Msun']]
+```
+
+```{python}
+X = df_final[features_cluster]
+y = df_final['sys_numeric']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+rf = RandomForestClassifier(
+    n_estimators=100, 
+    max_depth=20,        
+    min_samples_leaf=50,
+    class_weight='balanced',
+    n_jobs=-1,           
+    random_state=42      
+)
+rf.fit(X_train, y_train)
+
+y_pred = rf.predict(X_test)
+print(classification_report(y_test, y_pred, target_names=le.classes_))
+```
+
+```{python}
+cm = confusion_matrix(y_test, y_pred)
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Reds', 
+            xticklabels=le.classes_, yticklabels=le.classes_)
+plt.xlabel('Predicted Label')
+plt.ylabel('True Label')
+plt.title('Confusion Matrix: Star Cluster Classification')
+plt.show()
+```
+
+```{python}
+plot_feature_importance(rf,features_cluster,title="Feature Importance", label_dict=label_dict)
+```
+
+#### Model Performance and Physical Interpretability Summary
+
+##### 1. Dataset Characteristics & Class Imbalance
+The dataset contains a significant class imbalance across the three star cluster environments:
+* **Nuclear Star Clusters (NSC):** ~2,800,000 observations (Majority Class)
+* **Globular Clusters (GC):** ~438,000 observations
+* **Young Star Clusters (YSC):** ~7,500 observations (Minority Class)
+
+This distribution reflects the physical reality of the simulation (where NSCs produce far more hierarchical mergers due to high retention), but it poses a challenge for Machine Learning, as models tend to prioritize patterns in the majority class.
+
+##### 2. Evaluation Metrics Analysis
+Despite the imbalance, the model achieved an overall **Accuracy of 96%**. However, the **Macro Average F1-score (0.79)** provides a more honest view of performance across all classes:
+
+| Environment | Precision | Recall | F1-Score | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **NSC** | 0.99 | 0.96 | 0.98 | **Excellent:** Distinct physical signature. |
+| **GC** | 0.78 | 0.93 | 0.85 | **Strong:** Occasional overlap with NSC/YSC. |
+| **YSC** | 0.37 | 0.93 | 0.53 | **Weak Precision:** High false-positive rate. |
+
+**Key Finding:** The high **Recall (0.93)** for YSCs shows that the `class_weight='balanced'` parameter successfully forced the model to "find" the young clusters. However, the low **Precision (0.37)** indicates the model is over-assigning samples to the YSC category.
+
+##### 3. Confusion Matrix Insights
+The Confusion Matrix reveals the "Physical Overlap" causing these errors:
+* **The NSC Fortress:** The model rarely mistakes anything else for an NSC. Their massive escape velocities ($v_{esc}$) make them mathematically unique.
+* **The GC/YSC Blur:** A significant number of **Globular Clusters (~2,311)** were misclassified as **Young Star Clusters**. 
+* **Physical Interpretation:** This suggests that at lower cluster masses, the binary black hole features (mass, spin, and recoil) become less distinguishable. A $2g$ merger in a low-mass GC looks nearly identical to one in a YSC, leading the model to struggle with the boundary between these two environments.
+
+```{python}
+df_final['retention_ratio'] = df_final['c14:vkick/kms'] / df_final['c17:vesc/kms']
+
+if 'retention_ratio' not in features:
+    features.append('retention_ratio')
+label_dict['retention_ratio'] = r'$\mathrm{Retention\ Ratio}\  (v_{\mathrm{kick}}\,/v_{\mathrm{esc}})$'
+```
+
+```{python}
+features_cluster = [f for f in features if f not in ['c14:vkick/kms','c27:Ngen', 'chain_length', 'has_evolved_further', 'sys_numeric', 'c25:Mtot/Msun']]
+```
+
+```{python}
+final_weight = 'balanced'
+final_params = {
+    'n_estimators': 500, 
+    'min_samples_split': 2, 
+    'min_samples_leaf': 2, 
+    'max_features': 'sqrt', 
+    'max_depth': 30, 
+    'criterion': 'entropy'
+}
+```
+
+```{python}
+X = df_final[features_cluster]
+y = df_final['sys_numeric']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+```
+
+```{python}
+rf = RandomForestClassifier(
+    class_weight=final_weight, 
+    **final_params, 
+    n_jobs=-1, 
+    random_state=42
+)
+
+rf.fit(X_train, y_train)
+
+y_pred = rf.predict(X_test)
+print(classification_report(y_test, y_pred, target_names=le.classes_))
+```
+
+```{python}
+cm = confusion_matrix(y_test, y_pred)
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=le.classes_, yticklabels=le.classes_)
+plt.xlabel('Predicted Label')
+plt.ylabel('True Label')
+plt.title('Confusion Matrix: Star Cluster Classification')
+plt.show()
+```
+
+```{python}
+plot_feature_importance(rf,features_cluster,title="Feature Importance", label_dict=label_dict)
+```
+
+```{python}
+from support_code.plot_utils import plot_joint_threshold_split
+fig = plot_joint_threshold_split(df_final, ['GC', 'YSC', 'NSC'], 'c17:vesc', 'retention_ratio', None,label_dict,  threshold_row=None,cat='sys',sample_size=10000, col_col=None, threshold_col=sorted([0.0002, 0.008, 0.0012, 0.3]),quantile=0.99, save=False)
+fig
+```
+
+### SHAP
+
+While a Random Forest is incredibly powerful, it is often considered a "black box." It gives us an answer, but it doesn't easily tell us exactly *how* it arrived at that answer. To truly understand the physics our model is learning, we use **SHAP**.
+
+#### 1. What is SHAP?
+
+**SHAP (SHapley Additive exPlanations)** is the gold standard for Machine Learning interpretability. It is based on cooperative game theory. It looks at every single prediction and calculates the exact mathematical contribution of each feature.
+
+#### 2. Why is SHAP important?
+Standard Random Forest feature importance (which we used earlier) is slightly flawed. It only measures how *often* a feature was used to split a tree, which can sometimes be biased toward continuous variables (like Mass) simply because they offer more opportunities to split. 
+SHAP, on the other hand, measures the **actual impact on the prediction**. 
+
+#### 3. Why did we write *this* specific code (The Surrogate Model)?
+Calculating SHAP values requires massive computational power. If we asked SHAP to explain a massive Random Forest (300 deep trees) looking at 2.6 million Nuclear Star Cluster black holes, it would take days, or simply crash the computer. 
+
+To solve this, we built a **Lightweight Surrogate Model**:
+* **Step 1:** We take a random, representative sample of our training data (50,000 rows).
+* **Step 2:** We train a smaller, shallower Random Forest (100 trees, max depth 12) on this sample. 
+* **Step 3:** We calculate the SHAP values on a small test sample (500 rows) using this lighter model.
+
+This "Surrogate" is a mini-replica of our main model. It learns the exact same physical rules, but is small enough that we can calculate the SHAP values in seconds rather than hours, allowing us to peak inside the "black box" efficiently.
+
+```{python}
+print("1. Building the lightweight Surrogate Model...")
+
+X_surrogate_train = X_train.sample(n=50000, random_state=42)
+y_surrogate_train = y_train.loc[X_surrogate_train.index]
+
+rf_surrogate = RandomForestClassifier(
+    n_estimators=100,      
+    max_depth=12,
+    class_weight='balanced',
+    n_jobs=-1,
+    random_state=42
+)
+
+print("2. Training Surrogate Model...")
+rf_surrogate.fit(X_surrogate_train, y_surrogate_train)
+
+print("3. Calculating SHAP values...")
+
+X_sample_shap = X_test.sample(n=500, random_state=42)
+
+explainer = shap.TreeExplainer(rf_surrogate)
+
+shap_values = explainer.shap_values(X_sample_shap, check_additivity=False)
+```
+
+```{python}
+shap.summary_plot(
+    shap_values, 
+    X_sample_shap, 
+    class_names=le.classes_, 
+    plot_type="bar", 
+    show=False,           
+    plot_size=(10, 6)
+)
+
+plt.subplots_adjust(bottom=0.15, right=0.95)
+plt.show()
+```
+
+### Hierarchical Binary Evolution Prediction
+
+```{python}
+print("Gen 2:", len(df_final[df_final['has_evolved_further'] == 0]))
+print("Gen 2+:", len(df_final[df_final['has_evolved_further'] == 1]))
+```
+
+```{python}
+df_final['is_ejected'] = (df_final['c14:vkick/kms'] > df_final['c17:vesc/kms']).astype(int)
+label_dict['is_rejected'] = r'$\mathrm{Rejected}$'
+df_final['mass_ratio'] = df_final['c2:M2/Msun'] / df_final['c1:M1/Msun']
+label_dict['mass_ratio'] = r'$Mass ratio (M_2\,/ M_1) $'
+df_final['exceeds_hubble_time'] = (df_final['c13:(ngen (tDF+t3bb+tpeters))/Myr'] > 13700).astype(int)
+label_dict['exceeds_hubble_time'] = r'$Exceeds Hubble time (t > t_{Hub})$'
+new_physics_features = ['is_ejected', 'mass_ratio', 'exceeds_hubble_time']
+for new_feat in new_physics_features:
+    if new_feat not in features:
+        features.append(new_feat)
+```
+
+```{python}
+global_and_leak_cols = ['sys_numeric', 
+    'has_evolved_further', 'c27:Ngen', 'chain_length'
+]
+
+local_features = [f for f in features if f not in global_and_leak_cols]
+print(f"Isolating {len(local_features)} Local Features: {local_features}")
+```
+
+```{python}
+cluster_types = ['GC', 'NSC', 'YSC']
+
+saved_importances = {}
+
+for cluster in cluster_types:
+    print(f"\n{'='*50}")
+    print(f" ENVIRONMENT: {cluster} ")
+    print(f"{'='*50}")
+    
+    df_env = df_final[df_final['sys'] == cluster]
+    
+    counts = df_env['has_evolved_further'].value_counts()
+    terminal_count = counts.get(0, 0)
+    evolved_count = counts.get(1, 0)
+    
+    print(f"Data Distribution -> Terminal: {terminal_count} | Evolved: {evolved_count}")
+    
+    if terminal_count < 10 or evolved_count < 10:
+        print(f"Skipping {cluster} - Not enough diversity in data.")
+        continue
+        
+    X_env = df_env[local_features]
+    y_env = df_env['has_evolved_further'].astype(int)
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_env, y_env, test_size=0.2, random_state=42, stratify=y_env
+    )
+
+    rf_local = RandomForestClassifier(
+    class_weight=final_weight, 
+    **final_params, 
+    n_jobs=-1, 
+    random_state=42
+    )
+    
+    print(f"Training Local Physics Model for {cluster}...")
+    rf_local.fit(X_train, y_train)
+    
+    y_pred = rf_local.predict(X_test)
+    
+    print(f"\n--- {cluster} Classification Report ---")
+    print(classification_report(y_test, y_pred, target_names=['Stopped', 'Evolved'], zero_division=0))
+    
+    importances = pd.Series(rf_local.feature_importances_, index=local_features).sort_values(ascending=False)
+    saved_importances[cluster] = importances
+    
+    plot_feature_importance(rf_local,local_features,title=f"Feature Importance for cluster {cluster}", label_dict=label_dict)
+
+print("\nPipeline Complete! Importances are saved in the 'saved_importances' dictionary.")
+```
+
+## Predicting Binary Black Hole Outcomes with LightGBM
+
+LightGBM and Random Forest are machine learning methods based on ensembles of decision trees. In Random Forest, many trees are built independently using random subsets of the data and features, and the final prediction is obtained by averaging the predictions of all trees. The trees are typically grown level-wise, meaning that all nodes at the same depth are split simultaneously.
+
+In contrast, LightGBM belong to the family of gradient boosting methods, where trees are built sequentially and each new tree is trained to correct the errors made by the previous ones. LightGBM grows trees using a leaf-wise strategy, meaning that at each step it splits the leaf that produces the largest reduction in error, which often leads to faster convergence and better accuracy compared to the level-wise growth typically used in Random Forest.
+
+In our case we have chosen LightGBM instead other gradient boosting methods, since we are working with a large amount of data and it is convenient to prioritize training speed. Moreover, as we will see later, the model already achieves a very high accuracy, so potential performance differences between similar methods are not critical for our analysis.
+
+```{python}
+from support_code.ML_functions import train_model_lgb
+```
+
+```{python}
+# Features in LightGBM.
+features0 = ['c1_M1_Msun',
+             'c2_M2_Msun',
+             'c3_chi1',
+             'c4_chi2',
+             'c9_tDF_mint12_t3bb_Myr',
+             'c13_ngen tDF_t3bb_tpeters_Myr',
+             'c14_vkick_kms',
+             'c15_mrem_Msun',
+             'c16_arem',
+             'c17_vesc_kms',
+             'c25_Mtot_Msun',
+             'c27_Ngen',
+             'met',
+             'sys_numeric',
+             'chain_length',
+             'has_evolved_further']
+
+# Features for the evolution prediction.
+features1 = [f for f in features0 if f not in ['has_evolved_further','sys_numeric','chain_length','c27_Ngen']]
+
+# Features for the cluster prediction.
+features2 = [f for f in features0 if f not in ['c25_Mtot_Msun','sys_numeric']]
+
+label_dict_lgb = {
+    'c1_M1_Msun': r'$M_1\,/\,M_\odot$',
+    'c2_M2_Msun': r'$M_2\,/\,M_\odot$',
+    'c3_chi1': r'$\chi_1$',
+    'c4_chi2': r'$\chi_2$',
+    'c9_tDF_mint12_t3bb_Myr': r'$\left(t_{\mathrm{DF}}+\min\!\left(t_{12},t_{3\mathrm{bb}}\right)\right)/\mathrm{Myr}$',
+    'c13_ngen tDF_t3bb_tpeters_Myr': r'$\left(n_{\mathrm{gen}}\,(t_{\mathrm{DF}}+t_{3\mathrm{bb}}+t_{\mathrm{peters}})\right)/\mathrm{Myr}$',
+    'c14_vkick_kms': r'$v_{\mathrm{kick}}\ (\mathrm{km\,s^{-1}})$',
+    'c15_mrem_Msun': r'$m_{\mathrm{rem}}\,/\,M_\odot$',
+    'c16_arem': r'$a_{\mathrm{rem}}$',
+    'c17_vesc_kms': r'$v_{\mathrm{esc}}\ (\mathrm{km\,s^{-1}})$',
+    'c25_Mtot_Msun': r'$M_{\mathrm{tot}}\,/\,M_\odot$',
+    'c27_Ngen': r'$N_{\mathrm{gen}}$',
+    'met': r'$Z$',
+    'sys_numeric': r'$\mathrm{sys\_numeric}$',
+    'chain_length': r'$\mathrm{Chain\ Length}$',
+    'has_evolved_further': r'$\mathrm{Gen} \geq 3$'
+}
+```
+
+```{python}
+# Train models for each cluster and feature set.
+clusters = {"GC": df_GC, "NSC": df_NSC, "YSC": df_YSC}
+target = 'has_evolved_further'
+
+models = {}
+
+params = {'objective': 'binary', # Because our classification is about if it evolves or not.
+              'boosting_type': 'gbdt', # Gradient Boosting Decision Tree.
+              'learning_rate': 0.05,
+              'num_leaves': 31, # We allow up to 31 leaves so the model can capture different combinations of parameters.
+              'n_estimators': 300, # Improvements (of the previous model).
+              'verbose': -1}
+for cname, df_cluster in clusters.items():
+    print(f"\nTraining cluster {cname}...")
+    model, X_test, y_test, y_pred = train_model_lgb(df_cluster, features1, target, params=params)
+    models[(cname, 'Further evolution')] = model
+
+for (cname, fname), model in models.items():
+    title = f"Feature Importance - {cname}"
+    plot_feature_importance(model, features1, title, label_dict_lgb)
+
+print("Training and feature importance plots completed.")
+```
+
+```{python}
+target_cluster = 'sys_numeric' 
+
+# Define LightGBM classifier.
+params = {'objective': 'multiclass',   # Because now we have multiple solutions (3).
+          'num_class': len(y.unique()), 
+          'boosting_type': 'gbdt',
+          'learning_rate': 0.05,
+          'num_leaves': 31,
+          'n_estimators': 300,
+          'verbose': -1}
+
+model, X_test, y_test, y_pred = train_model_lgb(df_final, features2, target_cluster, params=params, stratify=True)
+
+plot_feature_importance(model, features2, title, label_dict_lgb)
+```
+
+```{python}
+print("=== LightGBM Classification Report (Cluster Prediction) ===\n")
+print(classification_report(y_test, y_pred, target_names=['GC', 'NSC', 'YSC']))
+```
+
+```{python}
+# Classification reports for LightGBM Evolution Prediction (Task 2)
+from sklearn.metrics import classification_report, f1_score
+
+print("="*60)
+print("LightGBM Classification Reports - Evolution Prediction (Task 2)")
+print("="*60)
+
+clusters_task2 = {"GC": df_GC, "NSC": df_NSC, "YSC": df_YSC}
+
+for cname, df_cluster in clusters_task2.items():
+    print(f"\n{'='*50}")
+    print(f" ENVIRONMENT: {cname} ")
+    print(f"{'='*50}")
+    
+    X_clust = df_cluster[features1]
+    y_clust = df_cluster['has_evolved_further']
+    
+    X_train_c, X_test_c, y_train_c, y_test_c = train_test_split(
+        X_clust, y_clust, test_size=0.2, random_state=42
+    )
+    
+    # Use the already trained model from the models dictionary
+    model_evol = models[(cname, 'Further evolution')]
+    y_pred_c = model_evol.predict(X_test_c)
+    
+    print(f"\n--- {cname} Classification Report ---")
+    print(classification_report(y_test_c, y_pred_c, target_names=['Stopped', 'Evolved'], zero_division=0))
+    
+    macro_f1_c = f1_score(y_test_c, y_pred_c, average='macro')
+    print(f"Macro F1-Score: {macro_f1_c:.4f}")
+```
+
+```{python}
+cm_lgb = confusion_matrix(y_test, y_pred)
+
+fig, ax = plt.subplots(figsize=(8, 6))
+sns.heatmap(cm_lgb, annot=True, fmt='d', cmap='Greens', 
+            xticklabels=['GC', 'NSC', 'YSC'], yticklabels=['GC', 'NSC', 'YSC'], ax=ax)
+ax.set_xlabel('Predicted Label')
+ax.set_ylabel('True Label')
+ax.set_title('Confusion Matrix: LightGBM Cluster Classification')
+```
+
+## Comparative Analysis: Random Forest vs LightGBM
+
+### 1. Performance Summary
+
+#### Task 1: Cluster Type Prediction (NSC / GC / YSC)
+
+| Metric | Random Forest | LightGBM | Winner |
+|:-------|:-------------:|:--------:|:------:|
+| **Accuracy** | 96.0% | 97.3% | LightGBM |
+| **Macro F1-Score** | 0.79 | **0.84** | LightGBM |
+| **Training Time** | ~20 min | ~1 min | LightGBM |
+
+#### Per-Class Performance Comparison
+
+| Class | Model | Precision | Recall | F1-Score |
+|:------|:------|:---------:|:------:|:--------:|
+| **GC** | Random Forest | 0.78 | 0.93 | 0.85 |
+| **GC** | LightGBM | **0.91** | 0.89 | **0.90** |
+| **NSC** | Random Forest | 0.99 | 0.96 | 0.98 |
+| **NSC** | LightGBM | 0.98 | **0.99** | **0.99** |
+| **YSC** | Random Forest | 0.37 | **0.93** | 0.53 |
+| **YSC** | LightGBM | **0.70** | 0.61 | **0.65** |
+
+**Key Insight:** LightGBM achieves significantly better **precision** for the minority class (YSC: 0.70 vs 0.37), while Random Forest achieves higher **recall** (0.93 vs 0.61). This trade-off reflects their different approaches to class imbalance.
+
+#### Task 2: Evolution Prediction (has_evolved_further) by Environment
+
+| Cluster | Model | Accuracy | Macro F1 | Stopped Recall | Evolved Recall |
+|:--------|:------|:--------:|:--------:|:--------------:|:--------------:|
+| **GC** | Random Forest | 97% | 0.49 | 0.00 | 1.00 |
+| **GC** | LightGBM | 97% | 0.49 | 0.00 | 1.00 |
+| **NSC** | Random Forest | 58% | 0.41 | 0.49 | 0.59 |
+| **NSC** | LightGBM | 96% | 0.49 | 0.00 | 1.00 |
+| **YSC** | Random Forest | 97% | 0.49 | 0.00 | 1.00 |
+| **YSC** | LightGBM | 97% | 0.49 | 0.00 | 1.00 |
+
+**Critical Finding:** Both models **fail completely** to detect "Stopped" mergers (Recall = 0.00 in all environments). The extreme class imbalance (~3-4% "Stopped" vs ~96-97% "Evolved") causes both Random Forest and LightGBM to predict almost everything as "Evolved". Neither `class_weight='balanced'` (RF) nor gradient boosting (LightGBM) can overcome this severe imbalance without additional techniques like oversampling (SMOTE) or cost-sensitive learning.
+
+### 2. Key Differences Between Models
+
+| Aspect | Random Forest | LightGBM |
+|:-------|:--------------|:---------|
+| **Architecture** | Bagging (parallel trees) | Boosting (sequential trees) |
+| **Tree Growth** | Level-wise | Leaf-wise |
+| **Training Speed** | Slower (~20x) | **Much faster** |
+| **Class Imbalance Handling** | `class_weight='balanced'` | None (default) |
+| **Interpretability** | SHAP analysis performed | Feature importance only |
+| **YSC Precision** | Low (0.37) | **Higher (0.70)** |
+| **YSC Recall** | **High (0.93)** | Lower (0.61) |
+
+### 3. Feature Importance Comparison
+
+Both models agree on the most important features for cluster classification:
+
+| Rank | LightGBM | Random Forest |
+|:-----|:---------|:--------------|
+| 1 | Dynamical friction time ($t_{DF}$) | Escape velocity ($v_{esc}$) |
+| 2 | Escape velocity ($v_{esc}$) | Retention ratio |
+| 3 | Primary mass ($M_1$) | Dynamical friction time ($t_{DF}$) |
+
+**Physical Insight:** Both models identify escape velocity as a critical discriminator, which makes physical sense since NSCs have much higher $v_{esc}$ than GCs or YSCs, allowing them to retain more merger products.
+
+### 4. Conclusions and Recommendations
+
+#### When to use Random Forest:
+- When **recall** for minority classes is critical (finding all YSCs)
+- When interpretability is crucial (SHAP analysis)
+- When you need to minimize false negatives
+
+#### When to use LightGBM:
+- When **precision** for minority classes matters (avoiding false positives)
+- When training speed is a priority (large datasets)
+- When maximizing overall accuracy and Macro F1
+
+#### Final Verdict:
+**LightGBM outperforms Random Forest** in Task 1 (Cluster Type Prediction):
+- Higher accuracy (97.3% vs 96.0%)
+- Higher Macro F1 (0.84 vs 0.79)
+- Much faster training (~20x speedup)
+- Better precision for YSC minority class (0.70 vs 0.37)
+
+**Both models fail equally in Task 2** (Evolution Prediction):
+- Neither can detect "Stopped" mergers (0% recall for both)
+- The extreme class imbalance (~3% vs ~97%) defeats both approaches
+
+However, **Random Forest with `class_weight='balanced'`** achieves higher recall for YSC (0.93 vs 0.61) in Task 1, which may be preferable if the scientific goal is to identify *all possible* young star cluster mergers, even at the cost of more false positives.
+
+**Recommendation:** Use **LightGBM** for Task 1 (cluster classification) due to superior speed and balanced metrics. For Task 2 (evolution prediction), **neither model is suitable** in their current configuration - specialized techniques for extreme imbalance are required.
+
+
